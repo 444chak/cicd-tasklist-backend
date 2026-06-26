@@ -1,0 +1,36 @@
+services:
+  db:
+    image: mysql:8.4
+    container_name: tasklist-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: tasklist
+      MYSQL_USER: tasklist
+      MYSQL_PASSWORD: tasklist
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: .
+    container_name: tasklist-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 3001
+      DATABASE_URL: mysql://tasklist:tasklist@db:3306/tasklist
+    ports:
+      - "3001:3001"
+    command: sh -c "npx prisma db push && npm start"
+
+volumes:
+  mysql-data:
