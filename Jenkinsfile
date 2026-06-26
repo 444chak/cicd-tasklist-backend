@@ -66,8 +66,66 @@ pipeline {
 
     stage('SonarQube Quality Gate') {
       steps {
-        timeout(time: 5, unit: 'MINUTES') {
-          waitForQualityGate abortPipeline: true, credentialsId: env.SONAR_CREDENTIALS_ID
+        withCredentials([string(credentialsId: env.SONAR_CREDENTIALS_ID, variable: 'SONAR_TOKEN')]) {
+          timeout(time: 15, unit: 'MINUTES') {
+            sh '''
+node <<'NODE'
+const fs = require('fs');
+
+const report = Object.fromEntries(
+  fs.readFileSync('.scannerwork/report-task.txt', 'utf8')
+    .split(/\\r?\\n/)
+    .filter(Boolean)
+    .map((line) => {
+      const index = line.indexOf('=');
+      return [line.slice(0, index), line.slice(index + 1)];
+    })
+);
+
+const headers = { Authorization: `Bearer ${process.env.SONAR_TOKEN}` };
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function getJson(url) {
+  const response = await fetch(url, { headers });
+  if (!response.ok) {
+    throw new Error(`SonarQube API ${response.status} on ${url}`);
+  }
+  return response.json();
+}
+
+let analysisId = null;
+for (let attempt = 1; attempt <= 90; attempt += 1) {
+  const ceTask = await getJson(report.ceTaskUrl);
+  const task = ceTask.task;
+  console.log(`SonarQube task status: ${task.status}`);
+
+  if (task.status === 'SUCCESS') {
+    analysisId = task.analysisId;
+    break;
+  }
+
+  if (task.status === 'FAILED' || task.status === 'CANCELED') {
+    throw new Error(`SonarQube task ended with status ${task.status}`);
+  }
+
+  await sleep(10000);
+}
+
+if (!analysisId) {
+  throw new Error('Timed out waiting for SonarQube analysis processing');
+}
+
+const gateUrl = `${report.serverUrl}/api/qualitygates/project_status?analysisId=${analysisId}`;
+const gate = await getJson(gateUrl);
+const status = gate.projectStatus.status;
+console.log(`SonarQube Quality Gate: ${status}`);
+
+if (status !== 'OK') {
+  throw new Error(`SonarQube Quality Gate failed with status ${status}`);
+}
+NODE
+            '''
+          }
         }
       }
     }
