@@ -19,18 +19,34 @@ services:
       retries: 20
 
   api:
-    build: .
+    build:
+      context: .
+      target: runtime
     container_name: tasklist-api
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       PORT: 3001
       DATABASE_URL: mysql://tasklist:tasklist@db:3306/tasklist
     ports:
       - "3001:3001"
-    command: sh -c "npx prisma db push && npm start"
+
+  migrate:
+    build:
+      context: .
+      target: build
+    container_name: tasklist-migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: mysql://tasklist:tasklist@db:3306/tasklist
+    command: npx prisma db push
+    restart: "no"
 
 volumes:
   mysql-data:
