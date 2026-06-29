@@ -138,6 +138,7 @@ NODE
             env.DOCKER_LATEST = "${env.DOCKERHUB_USERNAME}/${env.IMAGE_NAME}:latest"
           }
           sh '''
+            echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
             docker build --target runtime -t "$DOCKER_IMAGE" -t "$DOCKER_LATEST" .
           '''
         }
@@ -182,14 +183,10 @@ NODE
 
     stage('Publish Docker image') {
       steps {
-        withCredentials([usernamePassword(credentialsId: env.DOCKERHUB_CREDENTIALS_ID, usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
-          sh '''
-            echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
-            docker push "$DOCKER_IMAGE"
-            docker push "$DOCKER_LATEST"
-            docker logout
-          '''
-        }
+        sh '''
+          docker push "$DOCKER_IMAGE"
+          docker push "$DOCKER_LATEST"
+        '''
       }
     }
   }
@@ -197,6 +194,7 @@ NODE
   post {
     always {
       archiveArtifacts allowEmptyArchive: true, artifacts: 'coverage/lcov.info,reports/junit.xml'
+      sh 'docker logout || true'
       cleanWs()
     }
   }
