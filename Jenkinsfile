@@ -69,8 +69,8 @@ pipeline {
         withCredentials([string(credentialsId: env.SONAR_CREDENTIALS_ID, variable: 'SONAR_TOKEN')]) {
           timeout(time: 15, unit: 'MINUTES') {
             sh '''
-node <<'NODE'
-const fs = require('fs');
+node --input-type=module <<'NODE'
+import fs from 'node:fs';
 
 const report = Object.fromEntries(
   fs.readFileSync('.scannerwork/report-task.txt', 'utf8')
@@ -124,7 +124,7 @@ if (status !== 'OK') {
   throw new Error(`SonarQube Quality Gate failed with status ${status}`);
 }
 NODE
-            '''
+        '''
           }
         }
       }
